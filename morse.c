@@ -67,12 +67,22 @@ static const MorseEntry TABLE[] = {
     {'\0', NULL}
 };
 
-/* ----------------------------------------------------------
- * parse_token_to_std: convert a custom token to standard morse
- *   '+' -> '.'
- *   '===' -> '-'   (consume exactly 3 '=')
- * Returns 0 on success, -1 on invalid input.
- * ---------------------------------------------------------- */
+/**
+ * @brief Chuyển đổi một token Morse tùy chỉnh sang dạng Morse chuẩn.
+ *        Quét token từ trái sang phải theo quy tắc:
+ *          - Gặp '+' -> ghi '.' (dot)
+ *          - Gặp '===' (đúng 3 dấu '=') -> ghi '-' (dash)
+ *          - Gặp '=' đơn, '==' hoặc ký tự khác -> lỗi
+ *        Hàm này là static (nội bộ), chỉ dùng bởi morse_to_char() và validate_morse().
+ *
+ * @param token     Con trỏ đến token Morse tùy chỉnh cần chuyển đổi
+ *                  (ví dụ: "+===" cho chữ A)
+ * @param out       Buffer lưu kết quả Morse chuẩn
+ *                  (ví dụ: ".-" cho chữ A)
+ * @param out_size  Kích thước tối đa của buffer out
+ * @return int      0 nếu thành công, -1 nếu token không hợp lệ
+ *                  hoặc buffer quá nhỏ
+ */
 static int parse_token_to_std(const char *token, char *out, int out_size)
 {
     int i   = 0;
@@ -100,9 +110,16 @@ static int parse_token_to_std(const char *token, char *out, int out_size)
     return 0;
 }
 
-/* ----------------------------------------------------------
- * char_to_morse
- * ---------------------------------------------------------- */
+/**
+ * @brief Tra bảng mã Morse, trả về chuỗi mã tùy chỉnh tương ứng
+ *        với ký tự đầu vào. Ký tự in thường được tự động chuyển
+ *        sang in hoa trước khi tra bảng.
+ *
+ * @param c         Ký tự cần mã hóa (A-Z, a-z, 0-9)
+ * @return const char*  Con trỏ đến chuỗi mã Morse tùy chỉnh
+ *                      (ví dụ: "+===" cho 'A', "===+++" cho 'B')
+ *                      Trả về NULL nếu ký tự không có trong bảng
+ */
 const char *char_to_morse(char c)
 {
     c = (char)toupper((unsigned char)c);
@@ -113,9 +130,20 @@ const char *char_to_morse(char c)
     return NULL;
 }
 
-/* ----------------------------------------------------------
- * morse_to_char: parse a custom token, then look up the char
- * ---------------------------------------------------------- */
+/**
+ * @brief Tra bảng mã Morse, trả về ký tự tương ứng với token
+ *        Morse tùy chỉnh đầu vào. Thực hiện bằng cách:
+ *          1. Chuyển token đầu vào sang Morse chuẩn qua parse_token_to_std()
+ *          2. Duyệt toàn bộ bảng, chuyển từng code trong bảng sang
+ *             Morse chuẩn rồi so sánh
+ *          3. Trả về ký tự tương ứng nếu khớp
+ *
+ * @param token     Con trỏ đến token Morse tùy chỉnh cần giải mã
+ *                  (ví dụ: "+===" cho chữ A)
+ * @return char     Ký tự tương ứng nếu tìm thấy (ví dụ: 'A')
+ *                  Trả về '\0' nếu token không hợp lệ hoặc không
+ *                  tìm thấy trong bảng
+ */
 char morse_to_char(const char *token)
 {
     char std_token[32];
@@ -132,11 +160,17 @@ char morse_to_char(const char *token)
     return '\0';
 }
 
-/* ----------------------------------------------------------
- * validate_morse
- *   1. Only '+', '=', ' ' allowed
- *   2. Every space-separated token must be a known code
- * ---------------------------------------------------------- */
+/**
+ * @brief Kiểm tra tính hợp lệ của chuỗi Morse tùy chỉnh đầu vào
+ *        trước khi tiến hành giải mã. Thực hiện hai bước kiểm tra:
+ *          - Bước 1: Duyệt từng ký tự, chỉ cho phép '+', '=', ' '
+ *          - Bước 2: Tách chuỗi theo dấu cách, từng token phải khớp
+ *                    với ít nhất một mã trong bảng
+ *
+ * @param input     Con trỏ đến chuỗi Morse tùy chỉnh cần kiểm tra
+ * @return int      1 nếu chuỗi hợp lệ, 0 nếu không hợp lệ
+ *                  (chuỗi rỗng, ký tự lạ, hoặc token không xác định)
+ */
 int validate_morse(const char *input)
 {
     if (!input || input[0] == '\0') {
@@ -172,12 +206,22 @@ int validate_morse(const char *input)
     return 1;
 }
 
-/* ----------------------------------------------------------
- * encode: plain text -> custom morse
+/**
+ * @brief Mã hóa chuỗi văn bản thuần túy sang chuỗi Morse tùy chỉnh.
+ *        Duyệt từng ký tự trong input theo quy tắc:
+ *          - Ký tự chữ/số: tra bảng lấy code, thêm vào output
+ *          - Giữa các ký tự trong cùng một từ: chèn một dấu cách
+ *          - Giữa các từ (khi gặp space trong input): chèn hai dấu cách
+ *          - Ký tự không hỗ trợ: bỏ qua, in cảnh báo ra stderr
+ *        Bộ nhớ cho output phải được cấp phát bằng malloc() trước khi
+ *        gọi hàm này vì kích thước có thể lên đến 16 lần input.
  *
- * Letter separator : single space
- * Word separator   : double space
- * ---------------------------------------------------------- */
+ * @param input     Con trỏ đến chuỗi văn bản cần mã hóa (A-Z, a-z, 0-9)
+ * @param output    Con trỏ đến buffer lưu kết quả Morse tùy chỉnh
+ * @param out_size  Kích thước tối đa của buffer output
+ * @return int      0 nếu mã hóa thành công, -1 nếu lỗi
+ *                  (tham số không hợp lệ hoặc buffer quá nhỏ)
+ */
 int encode(const char *input, char *output, int out_size)
 {
     if (!input || !output || out_size <= 0) return -1;
@@ -233,14 +277,22 @@ int encode(const char *input, char *output, int out_size)
     return 0;
 }
 
-/* ----------------------------------------------------------
- * decode: custom morse -> plain text
+/**
+ * @brief Mã hóa chuỗi văn bản thuần túy sang chuỗi Morse tùy chỉnh.
+ *        Duyệt từng ký tự trong input theo quy tắc:
+ *          - Ký tự chữ/số: tra bảng lấy code, thêm vào output
+ *          - Giữa các ký tự trong cùng một từ: chèn một dấu cách
+ *          - Giữa các từ (khi gặp space trong input): chèn hai dấu cách
+ *          - Ký tự không hỗ trợ: bỏ qua, in cảnh báo ra stderr
+ *        Bộ nhớ cho output phải được cấp phát bằng malloc() trước khi
+ *        gọi hàm này vì kích thước có thể lên đến 16 lần input.
  *
- * Scan char by char:
- *   - collect non-space runs as tokens
- *   - single space  = letter separator
- *   - double space  = word separator (insert ' ' in output)
- * ---------------------------------------------------------- */
+ * @param input     Con trỏ đến chuỗi văn bản cần mã hóa (A-Z, a-z, 0-9)
+ * @param output    Con trỏ đến buffer lưu kết quả Morse tùy chỉnh
+ * @param out_size  Kích thước tối đa của buffer output
+ * @return int      0 nếu mã hóa thành công, -1 nếu lỗi
+ *                  (tham số không hợp lệ hoặc buffer quá nhỏ)
+ */
 int decode(const char *input, char *output, int out_size)
 {
     if (!input || !output || out_size <= 0) return -1;

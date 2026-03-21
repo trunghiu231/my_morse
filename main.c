@@ -12,9 +12,19 @@
  * All large buffers must be heap-allocated with malloc() / free().
  */
 
-/* ----------------------------------------------------------
- * Build output filename:  "test.txt" -> "test_encoded.txt"
- * ---------------------------------------------------------- */
+/**
+ * @brief Tạo tên file output từ tên file input và hậu tố cho trước.
+ *        Loại bỏ phần mở rộng của file input (nếu có) rồi ghép
+ *        thêm hậu tố và đuôi ".txt".
+ *        Ví dụ: "test.txt" + "encoded" -> "test_encoded.txt"
+ *               "input"   + "decoded" -> "input_decoded.txt"
+ *
+ * @param inpath        Đường dẫn file input gốc (ví dụ: "test.txt")
+ * @param suffix        Hậu tố cần thêm vào (ví dụ: "encoded", "decoded")
+ * @param outpath       Buffer lưu đường dẫn file output được tạo ra
+ * @param outpath_size  Kích thước tối đa của buffer outpath
+ * @return void
+ */
 static void make_outfile(const char *inpath, const char *suffix,
                          char *outpath, int outpath_size)
 {
@@ -27,7 +37,14 @@ static void make_outfile(const char *inpath, const char *suffix,
 
     snprintf(outpath, outpath_size, "%s_%s.txt", base, suffix);
 }
-
+/**
+ * @brief In hướng dẫn sử dụng chương trình ra stderr.
+ *        Được gọi khi người dùng truyền sai số lượng tham số
+ *        hoặc sử dụng flag không hợp lệ.
+ *
+ * @param prog  Tên chương trình (thường là argv[0])
+ * @return void
+ */
 static void usage(const char *prog)
 {
     fprintf(stderr, "Usage:\n");
@@ -35,9 +52,38 @@ static void usage(const char *prog)
     fprintf(stderr, "  Decode a file:  %s -d <input_file>\n", prog);
 }
 
-/* ----------------------------------------------------------
- * main
- * ---------------------------------------------------------- */
+/**
+ * @brief Điểm vào chương trình. Phân tích tham số dòng lệnh và
+ *        điều phối luồng xử lý encode hoặc decode.
+ * 
+ *        Luồng xử lý ENCODE (-e):
+ *          1. Cấp phát buffer input (MAX_INPUT_LEN + 1) và output
+ *             (MAX_INPUT_LEN * 16 + 1) trên heap bằng malloc() để
+ *             tránh Segmentation Fault khi kích thước lên đến 10 triệu ký tự
+ *          2. Đọc file input vào buffer
+ *          3. Gọi encode() để mã hóa
+ *          4. In tối đa MAX_DISPLAY ký tự ra màn hình
+ *          5. Lưu toàn bộ kết quả vào file <input>_encoded.txt
+ *          6. Giải phóng bộ nhớ bằng free()
+ *
+ *        Luồng xử lý DECODE (-d):
+ *          1. Khai báo buffer trên stack (kích thước nhỏ, tối đa 100 ký tự)
+ *          2. Đọc file input vào buffer, xóa ký tự newline thừa cuối chuỗi
+ *          3. Gọi validate_morse() để kiểm tra tính hợp lệ
+ *          4. Gọi decode() để giải mã
+ *          5. In tối đa MAX_DISPLAY ký tự ra màn hình
+ *          6. Lưu toàn bộ kết quả vào file <input>_decoded.txt
+ *
+ * @param argc  Số lượng tham số dòng lệnh (phải đúng bằng 3)
+ * @param argv  Mảng chuỗi tham số:
+ *                argv[0]: tên chương trình
+ *                argv[1]: flag "-e" hoặc "-d"
+ *                argv[2]: đường dẫn file input
+ * @return int  EXIT_SUCCESS (0) nếu thành công
+ *              EXIT_FAILURE (1) nếu có lỗi (sai tham số, lỗi file,
+ *              lỗi mã hóa/giải mã, hoặc hết bộ nhớ)
+ */
+
 int main(int argc, char *argv[])
 {
     if (argc != 3) {
